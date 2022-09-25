@@ -7,11 +7,16 @@ import (
 	"strconv"
 )
 
-type User struct {
+type UserEntity struct {
 	Id       int    `json:"id,omitempty"`
 	UserName string `json:"username"`
 	Email    string `json:"email"`
 	Fullname string `json:"fullname,omitempty"`
+}
+
+type User struct {
+	UserEntity
+	Links `json:"links,omitempty"`
 }
 
 //------------------------------------------------
@@ -19,12 +24,22 @@ type User struct {
 //------------------------------------------------
 
 func findAllUsers(c *gin.Context) {
-	u, err := getAllUsers()
+	users, err := getAllUsers()
 	if err != nil {
 		renderError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	ua := make([]*User, 0)
+	for _, ue := range users {
+		lb := New(c.Request)
+		lb.Add("self", fmt.Sprintf("/api/user/%d", ue.Id))
+		u := User{
+			*ue,
+			lb.Links,
+		}
+		ua = append(ua, &u)
+	}
+	c.JSON(http.StatusOK, ua)
 }
 
 func findUserById(c *gin.Context) {
@@ -34,16 +49,22 @@ func findUserById(c *gin.Context) {
 		renderError(c, http.StatusBadRequest, "id must be an int")
 		return
 	}
-	u, err := getUserById(id)
+	ue, err := getUserById(id)
 	if err != nil {
 		renderError(c, http.StatusNotFound, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, u)
+	lb := New(c.Request)
+	lb.Add("self", fmt.Sprintf("/api/user/%d", ue.Id))
+	user := User{
+		*ue,
+		lb.Links,
+	}
+	c.JSON(http.StatusOK, user)
 }
 
 func addUser(c *gin.Context) {
-	u := User{}
+	u := UserEntity{}
 	err := c.BindJSON(&u)
 	if err != nil {
 		renderError(c, http.StatusBadRequest, "error parsing user data. "+err.Error())
@@ -64,11 +85,17 @@ func addUser(c *gin.Context) {
 		renderError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, u2)
+	lb := New(c.Request)
+	lb.Add("self", fmt.Sprintf("/api/user/%d", u2.Id))
+	user := User{
+		*u2,
+		lb.Links,
+	}
+	c.JSON(http.StatusOK, user)
 }
 
 func updateUser(c *gin.Context) {
-	u := User{}
+	u := UserEntity{}
 	err := c.BindJSON(&u)
 	if err != nil {
 		renderError(c, http.StatusBadRequest, "error parsing user data. "+err.Error())
@@ -84,7 +111,13 @@ func updateUser(c *gin.Context) {
 		renderError(c, http.StatusNotFound, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, u2)
+	lb := New(c.Request)
+	lb.Add("self", fmt.Sprintf("/api/user/%d", u2.Id))
+	user := User{
+		*u2,
+		lb.Links,
+	}
+	c.JSON(http.StatusOK, user)
 }
 
 func deleteUser(c *gin.Context) {
@@ -111,10 +144,10 @@ func deleteUser(c *gin.Context) {
 // BACKEND
 //------------------------------------------------
 
-var users = make([]*User, 0)
+var users = make([]*UserEntity, 0)
 
-// add user to user list
-func create(u *User) (*User, error) {
+// Add user to user list
+func create(u *UserEntity) (*UserEntity, error) {
 	if u.Id != 0 {
 		return nil, fmt.Errorf("id must not be set")
 	}
@@ -129,7 +162,7 @@ func create(u *User) (*User, error) {
 	return u, nil
 }
 
-func delete(u *User) error {
+func delete(u *UserEntity) error {
 	for i, us := range users {
 		if us.Id == u.Id {
 			users = append(users[:i], users[i+1:]...)
@@ -139,7 +172,7 @@ func delete(u *User) error {
 	return fmt.Errorf("user %s with id %d not found", u.UserName, u.Id)
 }
 
-func update(u *User) (*User, error) {
+func update(u *UserEntity) (*UserEntity, error) {
 	us, err := getUserById(u.Id)
 	if err != nil {
 		return nil, err
@@ -150,7 +183,7 @@ func update(u *User) (*User, error) {
 	return u, nil
 }
 
-func getUserById(id int) (*User, error) {
+func getUserById(id int) (*UserEntity, error) {
 	for _, us := range users {
 		if us.Id == id {
 			return us, nil
@@ -159,7 +192,7 @@ func getUserById(id int) (*User, error) {
 	return nil, fmt.Errorf("user with id %d not found", id)
 }
 
-func findUserByUsername(username string) (*User, error) {
+func findUserByUsername(username string) (*UserEntity, error) {
 	for _, us := range users {
 		if us.UserName == username {
 			return us, nil
@@ -168,6 +201,6 @@ func findUserByUsername(username string) (*User, error) {
 	return nil, fmt.Errorf("user with username %s not found", username)
 }
 
-func getAllUsers() ([]*User, error) {
+func getAllUsers() ([]*UserEntity, error) {
 	return users, nil
 }
